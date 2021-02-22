@@ -65,6 +65,7 @@ class user():
         def mypad_refresh(): return pad.refresh(
             msg_current_y, 0, msg_current_print_y, 0, 20, 40)
         inp = ''
+
         self.draw_msg(msg_current_y, self.msg, pad)
         mypad_refresh()
         msg_current_print_y += 2
@@ -85,7 +86,7 @@ class user():
                     if not g_msg:
                         break
                     else:
-                        if msg_current_print_y != 18:
+                        if 18 > msg_current_print_y >= 0:
                             self.draw_msg(msg_current_y, g_msg, pad)
                             mypad_refresh()
                             msg_current_print_y += 1
@@ -97,6 +98,7 @@ class user():
                             msg_current_y += 1
                         win.refresh()
                         show = msg_current_y
+                        show2 = msg_current_print_y
                 else:
                     get = win.getch()
                     win.move(step_y+1, step_X)
@@ -116,13 +118,17 @@ class user():
                                     msg_current_print_y+1, 0, 20, 40)
                         win.refresh()
                     else:
-                        self.server.send(bytes(inp, 'utf-8'))
-                        inp = ''
-                        step_X = 16
-                        win.clear()
-                        win.box()
-                        win.addstr(step_y+1, 1, 'Enter message:')
-                        win.refresh()
+                        if '/file' in inp[:5]:
+                            path = inp.split(' ')[-1]
+                            pass
+                        else:
+                            self.server.send(bytes(inp, 'utf-8'))
+                            inp = ''
+                            step_X = 16
+                            win.clear()
+                            win.box()
+                            win.addstr(step_y+1, 1, 'Enter message:')
+                            win.refresh()
 
 
 user()

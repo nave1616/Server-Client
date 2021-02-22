@@ -29,14 +29,18 @@ class Login():
 
     def register(self, username, password):
         try_user_name = username
+        with open(os.path.join(self.user_dict, try_user_name+'.txt'), 'a') as user_file:
+            user_file.writelines(password)
+            self.user_name = try_user_name
+            self.users.append(self.user_name)
+            return True
+
+    def exsist(self, username):
+        try_user_name = username
         if os.path.isfile(os.path.join(self.user_dict, try_user_name+'.txt')):
-            return False
+            return True
         else:
-            with open(os.path.join(self.user_dict, try_user_name+'.txt'), 'a') as user_file:
-                user_file.writelines(password)
-                self.user_name = try_user_name
-                self.users.append(self.user_name)
-                return True
+            return False
 
 
 if __name__ == '__main__':
