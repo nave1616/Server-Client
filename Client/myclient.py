@@ -2,9 +2,8 @@ import socket
 import threading
 import time
 import stdiomask
-import select
-import sys
 import curses
+from os import system, path
 
 
 class user():
@@ -15,120 +14,151 @@ class user():
         self.server.connect((self.ip, self.port))
         self.username = None
         self.text = []
+        self.run = False
+        self.realease = False
         self.admin = None
-        self.login()
 
     def login(self):
         while True:
             time.sleep(0.1)
             self.msg = self.server.recv(1024).decode('utf-8')
             if not self.msg:
-                break
+                return False
             elif 'wrong' in self.msg or 'exsist' in self.msg or '/login' in self.msg or '/register' in self.msg:
                 print(self.msg)
                 ans = input('Enter command: ')
                 self.server.send(bytes(ans, 'utf-8'))
             elif 'password' in self.msg:
-                ans = stdiomask.getpass(prompt=self.msg.rstrip('\n')+': ')
+                ans = stdiomask.getpass(prompt=self.msg.rstrip('\n') + ': ')
                 self.server.send(bytes(ans, 'utf-8'))
             elif 'Succssefully' in self.msg:
-                break
-        curses.wrapper(self.chat)
+                self.run = True
+                return True
 
-    def draw_msg(self, curr_y, text, window):
-        window.addstr(curr_y, 0, text)
-
-    def chat(self, stdscr):
+    def window(self, stdscr):
         stdscr.refresh()
-        curses.noecho
+        curses.noecho()
         curses.cbreak()
         stdscr.nodelay(1)
         stdscr.keypad(True)
-        max_y, max_X = stdscr.getmaxyx()
-        msg_current_print_y = 0
-        msg_current_y = 0
-        height = 3
-        width = max_X-1
-        input_begin_x = 0
-        input_begin_y = int(max_y-3)
-        step_y = 0
-        step_X = 16
-        show = msg_current_y
-        pad = curses.newpad(200, 200)
-        pad.scrollok(True)
-        win = curses.newwin(height, width, input_begin_y, input_begin_x)
-        win.keypad(True)
-        win.clear()
-        win.box()
-        win.refresh()
+        curses.start_color()
+        # 1 - bg=CAYAN,TEXT=WHITE
+        # 2 - bg=CAYAN,TEXT=YELLOW
+        curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_CYAN)
 
-        def mypad_refresh(): return pad.refresh(
-            msg_current_y, 0, msg_current_print_y, 0, 20, 40)
+        curses.init_pair(2, curses.COLOR_YELLOW,
+                         curses.COLOR_CYAN)
+        curses.init_pair(3, curses.COLOR_WHITE,
+                         curses.COLOR_RED)
+        msg_win_thread = threading.Thread(target=self.recv_m, args=(stdscr,))
+        msg_win_thread.setDaemon(True)
+        msg_win_thread.start()
+        self.send_m(stdscr)
+
+    def draw_msg(self, curr_y, text, window, color_atter=1):
+        window.addstr(curr_y, 1, text, curses.color_pair(color_atter))
+
+    def recv_m(self, stdscr):
+
+        # self.pad//
+        self.page = 0
+        self.show = 0
+        _, max_x = stdscr.getmaxyx()
+        self.msg_current_print_y = 0
+        self.msg_current_y = 0
+        self.pad = curses.newpad(200, 200)
+        self.pad.scrollok(True)
+        self.pad.bkgd(' ', curses.color_pair(1))
+
+        mypad_refresh = lambda: self.pad.refresh(
+            self.msg_current_y, 0, self.msg_current_print_y, 0, 20, max_x - 1)
+
+        self.draw_msg(self.msg_current_y, self.msg, self.pad, 2)
+        mypad_refresh()
+        self.msg_current_print_y += 3
+        self.msg_current_y += 3
+        self.realease = True
+        while self.run:
+            g_msg = self.server.recv(1024).decode('utf-8')
+            if not g_msg:
+                self.run = False
+            else:
+                curses.curs_set(0)
+                if 18 >= self.msg_current_print_y >= 0:
+                    self.draw_msg(self.msg_current_y, g_msg, self.pad)
+                    mypad_refresh()
+                    self.msg_current_print_y += 1
+                    self.msg_current_y += 1
+                else:
+                    self.draw_msg(self.msg_current_y, g_msg, self.pad)
+                    mypad_refresh()
+                    self.msg_current_print_y = 0
+                    self.msg_current_y += 1
+                    self.page = int(self.msg_current_y / 18)
+                self.show = self.msg_current_y
+        curses.endwin()
+        self.server.close()
+        print('**   Disconnected from server    **')
+        time.sleep(3)
+
+    def send_m(self, stdscr):
+
+        height, width = 3, 80
+        input_begin_x, input_begin_y = 0, 21
+        step_y = 1
+        step_X = 16
         inp = ''
 
-        self.draw_msg(msg_current_y, self.msg, pad)
-        mypad_refresh()
-        msg_current_print_y += 2
-        msg_current_y += 2
-        win.box()
-        win.addstr(step_y+1, 1, 'Enter message:')
-        win.refresh()
-        while True:
+        while not self.realease:
             time.sleep(0.1)
-            self.inputs = [self.server, sys.stdin]
-            ready_r, _, _ = select.select(self.inputs, [], [])
-            win.box()
-            win.addstr(step_y+1, 1, 'Enter message:')
-            win.refresh()
-            for ready in ready_r:
-                if ready == self.server:
-                    g_msg = self.server.recv(1024).decode('utf-8')
-                    if not g_msg:
-                        break
-                    else:
-                        if 18 > msg_current_print_y >= 0:
-                            self.draw_msg(msg_current_y, g_msg, pad)
-                            mypad_refresh()
-                            msg_current_print_y += 1
-                            msg_current_y += 1
-                        else:
-                            self.draw_msg(msg_current_y, g_msg, pad)
-                            mypad_refresh()
-                            msg_current_print_y = 0
-                            msg_current_y += 1
-                        win.refresh()
-                        show = msg_current_y
-                        show2 = msg_current_print_y
+        self.win = curses.newwin(
+            height, width, input_begin_y, input_begin_x)
+        self.win.keypad(True)
+        self.win.bkgd(' ', curses.color_pair(1))
+        curses.curs_set(1)
+        while self.run:
+            self.win.clrtoeol()
+            self.win.box()
+            self.win.addstr(step_y, 1, 'Enter message:')
+            self.win.move(step_y, step_X)
+            self.win.refresh()
+            get = self.win.getch()
+            if get != ord('\n') and get != curses.KEY_UP and get != curses.KEY_DOWN:
+                inp = inp + chr(get)
+                self.win.addch(step_y, step_X, chr(get))
+                step_X += 1
+            elif get == curses.KEY_UP and self.show > 0 and self.page > 0:
+                self.show -= 1
+                self.pad.refresh(self.show, 0,
+                                 0, 0, 20, 40)
+                self.win.refresh()
+            elif get == curses.KEY_DOWN and self.show < self.msg_current_y:
+                self.show += 1
+                self.pad.refresh(self.show, 0,
+                                 self.msg_current_print_y + 1, 0, 20, 40)
+                self.win.refresh()
+            else:
+                if self.run and inp[0] != '/':
+                    self.win.clrtoeol()
+                    self.win.refresh()
+                    self.server.send(bytes(inp, 'utf-8'))
+                    inp = ''
+                    step_X = 16
                 else:
-                    get = win.getch()
-                    win.move(step_y+1, step_X)
-                    if get != ord('\n') and get != curses.KEY_UP and get != curses.KEY_DOWN:
-                        inp = inp+chr(get)
-                        win.addch(step_y+1, step_X, chr(get))
-                        step_X += 1
-                        win.refresh()
-                    elif get == curses.KEY_UP and show > 0:
-                        show -= 1
-                        pad.refresh(show, 0,
-                                    msg_current_print_y-1, 0, 20, 40)
-                        win.refresh()
-                    elif get == curses.KEY_DOWN and show < msg_current_y:
-                        show += 1
-                        pad.refresh(show, 0,
-                                    msg_current_print_y+1, 0, 20, 40)
-                        win.refresh()
-                    else:
-                        if '/file' in inp[:5]:
-                            path = inp.split(' ')[-1]
-                            pass
-                        else:
-                            self.server.send(bytes(inp, 'utf-8'))
-                            inp = ''
-                            step_X = 16
-                            win.clear()
-                            win.box()
-                            win.addstr(step_y+1, 1, 'Enter message:')
-                            win.refresh()
+                    path = inp.strip(' ')[-1]
+                    self.server.send(bytes(path, 'utf-8'))
+                    path = inp.strip(' ')[-1]
+                    with open(path, 'rb') as file:
+                        data = file.read()
+                    self.server.send(bytes(len(data), 'utf-8'))
+                    self.server.send(data)
+        self.server.close()
 
 
-user()
+obj = user()
+connect = obj.login()
+if not connect:
+    print('Cant connect server\n*Disconnected from server')
+    time.sleep(3)
+else:
+    curses.wrapper(obj.window)
