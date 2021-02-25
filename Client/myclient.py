@@ -6,34 +6,16 @@ import curses
 from os import system, path
 
 
-class user():
-    def __init__(self):
-        self.ip = '0.0.0.0'
-        self.port = 5050
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.connect((self.ip, self.port))
+class Terminal():
+
+    def __init__(self, socket):
+        self.socket = socket
+
         self.username = None
         self.text = []
-        self.run = False
+        self.run = True
         self.realease = False
-        self.admin = None
-
-    def login(self):
-        while True:
-            time.sleep(0.1)
-            self.msg = self.server.recv(1024).decode('utf-8')
-            if not self.msg:
-                return False
-            elif 'wrong' in self.msg or 'exsist' in self.msg or '/login' in self.msg or '/register' in self.msg:
-                print(self.msg)
-                ans = input('Enter command: ')
-                self.server.send(bytes(ans, 'utf-8'))
-            elif 'password' in self.msg:
-                ans = stdiomask.getpass(prompt=self.msg.rstrip('\n') + ': ')
-                self.server.send(bytes(ans, 'utf-8'))
-            elif 'Succssefully' in self.msg:
-                self.run = True
-                return True
+        self.connected = False
 
     def window(self, stdscr):
         stdscr.refresh()
@@ -46,10 +28,10 @@ class user():
         # 2 - bg=CAYAN,TEXT=YELLOW
         curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_CYAN)
 
-        curses.init_pair(2, curses.COLOR_YELLOW,
+        curses.init_pair(2, curses.COLOR_WHITE,
+                         curses.COLOR_GREEN)
+        curses.init_pair(3, curses.COLOR_RED,
                          curses.COLOR_CYAN)
-        curses.init_pair(3, curses.COLOR_WHITE,
-                         curses.COLOR_RED)
         msg_win_thread = threading.Thread(target=self.recv_m, args=(stdscr,))
         msg_win_thread.setDaemon(True)
         msg_win_thread.start()
@@ -58,48 +40,63 @@ class user():
     def draw_msg(self, curr_y, text, window, color_atter=1):
         window.addstr(curr_y, 1, text, curses.color_pair(color_atter))
 
+    def announce(self, curr_y, text, window, color_atter=1):
+        for i in range(len(text)):
+            for j in range(200):
+                lett_pos = (i + j - 1) % len(text)
+                window.addstr(curr_y, ((self.max_x // 2) - len(text) + 10) + i, text[lett_pos],
+                              curses.color_pair(color_atter))
+                self.pad.refresh(curr_y, 0,
+                                 curr_y, 0, 20, self.max_x - 1)
+            time.sleep(0.1)
+
     def recv_m(self, stdscr):
 
         # self.pad//
         self.page = 0
         self.show = 0
-        _, max_x = stdscr.getmaxyx()
+        _, self.max_x = stdscr.getmaxyx()
         self.msg_current_print_y = 0
         self.msg_current_y = 0
-        self.pad = curses.newpad(200, 200)
+        self.pad = curses.newpad(4000, 200)
         self.pad.scrollok(True)
         self.pad.bkgd(' ', curses.color_pair(1))
 
-        mypad_refresh = lambda: self.pad.refresh(
-            self.msg_current_y, 0, self.msg_current_print_y, 0, 20, max_x - 1)
-
-        self.draw_msg(self.msg_current_y, self.msg, self.pad, 2)
-        mypad_refresh()
-        self.msg_current_print_y += 3
-        self.msg_current_y += 3
+        self.mypad_refresh = lambda: self.pad.refresh(
+            self.msg_current_y, 0, self.msg_current_print_y, 0, 20, self.max_x - 1)
+        self.mypad_refresh()
         self.realease = True
         while self.run:
-            g_msg = self.server.recv(1024).decode('utf-8')
-            if not g_msg:
+            self.g_msg = self.socket.recv(1024).decode('utf-8')
+            curses.curs_set(0)
+            if not self.g_msg:
                 self.run = False
+                self.draw_msg(self.msg_current_y,
+                              '**Disconnected from server**', self.pad)
+                self.mypad_refresh()
             else:
-                curses.curs_set(0)
-                if 18 >= self.msg_current_print_y >= 0:
-                    self.draw_msg(self.msg_current_y, g_msg, self.pad)
-                    mypad_refresh()
-                    self.msg_current_print_y += 1
-                    self.msg_current_y += 1
+                spaces = self.g_msg.count('\n') + 1
+                if 'Succssefully' in self.g_msg and not self.connected:
+                    self.connected = True
+                    self.announce(self.msg_current_y,
+                                  self.g_msg, self.pad, color_atter=2)
+                elif 'Wrong' in self.g_msg or 'allready connected' in self.g_msg or 'No' in self.g_msg and not self.connected:
+                    self.draw_msg(self.msg_current_y,
+                                  self.g_msg, self.pad, color_atter=3)
                 else:
-                    self.draw_msg(self.msg_current_y, g_msg, self.pad)
-                    mypad_refresh()
+                    self.draw_msg(self.msg_current_y, self.g_msg, self.pad)
+                self.mypad_refresh()
+                if 17 >= (self.msg_current_print_y + spaces) >= 0:
+                    self.msg_current_print_y += spaces
+                    self.msg_current_y += spaces
+                else:
                     self.msg_current_print_y = 0
-                    self.msg_current_y += 1
+                    self.msg_current_y += spaces
                     self.page = int(self.msg_current_y / 18)
                 self.show = self.msg_current_y
+        self.socket.close()
+        time.sleep(5)
         curses.endwin()
-        self.server.close()
-        print('**   Disconnected from server    **')
-        time.sleep(3)
 
     def send_m(self, stdscr):
 
@@ -108,57 +105,69 @@ class user():
         step_y = 1
         step_X = 16
         inp = ''
-
+        win = curses.newwin(
+            height, width, input_begin_y, input_begin_x)
         while not self.realease:
             time.sleep(0.1)
-        self.win = curses.newwin(
-            height, width, input_begin_y, input_begin_x)
-        self.win.keypad(True)
-        self.win.bkgd(' ', curses.color_pair(1))
-        curses.curs_set(1)
+        win.keypad(True)
+        win.bkgd(' ', curses.color_pair(1))
         while self.run:
-            self.win.clrtoeol()
-            self.win.box()
-            self.win.addstr(step_y, 1, 'Enter message:')
-            self.win.move(step_y, step_X)
-            self.win.refresh()
-            get = self.win.getch()
-            if get != ord('\n') and get != curses.KEY_UP and get != curses.KEY_DOWN:
-                inp = inp + chr(get)
-                self.win.addch(step_y, step_X, chr(get))
-                step_X += 1
+            curses.curs_set(1)
+            win.box()
+            if self.connected == False:
+                if 'password' in self.g_msg:
+                    win.addstr(step_y, 1, 'Enter password:')
+                else:
+                    win.addstr(step_y, 1, 'Enter command: ')
+            elif self.connected == True:
+                win.addstr(step_y, 1, 'Enter message: ')
+            win.move(step_y, step_X)
+            win.refresh()
+            get = win.getch()
+            if get != ord('\n') and get != curses.KEY_UP and get != curses.KEY_DOWN and get != curses.KEY_BACKSPACE:
+                if 'password' in self.g_msg and self.connected == False:
+                    inp = inp + chr(get)
+                    win.addch(step_y, step_X + 1, '*')
+                    step_X += 1
+                else:
+                    inp = inp + chr(get)
+                    win.addch(step_y, step_X, chr(get))
+                    step_X += 1
             elif get == curses.KEY_UP and self.show > 0 and self.page > 0:
                 self.show -= 1
                 self.pad.refresh(self.show, 0,
                                  0, 0, 20, 40)
-                self.win.refresh()
+                win.refresh()
             elif get == curses.KEY_DOWN and self.show < self.msg_current_y:
                 self.show += 1
                 self.pad.refresh(self.show, 0,
                                  self.msg_current_print_y + 1, 0, 20, 40)
-                self.win.refresh()
-            else:
-                if self.run and inp[0] != '/':
-                    self.win.clrtoeol()
-                    self.win.refresh()
-                    self.server.send(bytes(inp, 'utf-8'))
-                    inp = ''
-                    step_X = 16
-                else:
-                    path = inp.strip(' ')[-1]
-                    self.server.send(bytes(path, 'utf-8'))
-                    path = inp.strip(' ')[-1]
-                    with open(path, 'rb') as file:
-                        data = file.read()
-                    self.server.send(bytes(len(data), 'utf-8'))
-                    self.server.send(data)
-        self.server.close()
+                win.refresh()
+            elif get == curses.KEY_BACKSPACE:
+                if step_X - 1 > 15:
+                    step_X -= 1
+                    win.move(step_y, step_X)
+                    win.clrtoeol()
+                    win.refresh()
+                    inp = inp[0:len(inp) - 1]
+            elif get == ord('\n') and inp != '':
+                step_X = 16
+                win.move(step_y, step_X)
+                win.clrtoeol()
+                win.refresh()
+                if self.run:
+                    self.socket.send(bytes(inp, 'utf-8'))
+                elif self.run and inp[0] == '/':
+                    # To add command
+                    self.socket.send(bytes(inp, 'utf-8'))
+                inp = ''
+                win.refresh()
+        self.socket.close()
 
 
-obj = user()
-connect = obj.login()
-if not connect:
-    print('Cant connect server\n*Disconnected from server')
-    time.sleep(3)
-else:
-    curses.wrapper(obj.window)
+ip = '0.0.0.0'
+port = 5050
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.connect((ip, port))
+server_init = Terminal(server)
+main_win = curses.wrapper(server_init.window)
