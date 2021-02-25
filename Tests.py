@@ -7,6 +7,7 @@ from os import system, path
 
 
 class user():
+
     def __init__(self):
         self.ip = '0.0.0.0'
         self.port = 5050
@@ -17,23 +18,6 @@ class user():
         self.run = False
         self.realease = False
         self.admin = None
-
-    def login(self):
-        while True:
-            time.sleep(0.1)
-            self.msg = self.server.recv(1024).decode('utf-8')
-            if not self.msg:
-                return False
-            elif 'wrong' in self.msg or 'exsist' in self.msg or '/login' in self.msg or '/register' in self.msg:
-                print(self.msg)
-                ans = input('Enter command: ')
-                self.server.send(bytes(ans, 'utf-8'))
-            elif 'password' in self.msg:
-                ans = stdiomask.getpass(prompt=self.msg.rstrip('\n') + ': ')
-                self.server.send(bytes(ans, 'utf-8'))
-            elif 'Succssefully' in self.msg:
-                self.run = True
-                return True
 
     def window(self, stdscr):
         stdscr.refresh()
@@ -50,10 +34,41 @@ class user():
                          curses.COLOR_CYAN)
         curses.init_pair(3, curses.COLOR_WHITE,
                          curses.COLOR_RED)
+        self.login_window(stdscr)
         msg_win_thread = threading.Thread(target=self.recv_m, args=(stdscr,))
         msg_win_thread.setDaemon(True)
         msg_win_thread.start()
         self.send_m(stdscr)
+
+    def login_window(self, stdscr):
+        max_y, max_x = stdscr.getmaxyx()
+        # login_window
+        login_win = curses.newwin(max_y - 3, max_x, 0, 0)
+        # input windows
+        height, width = 3, 80
+        input_begin_x, input_begin_y = 0, 21
+        step_y = 1
+        step_X = 16
+        inp = ''
+        input_win = curses.newwin(height, width, input_begin_y, input_begin_x)
+        while True:
+            time.sleep(0.1)
+            self.msg = self.server.recv(1024).decode('utf-8')
+            if not self.msg:
+                return False
+            elif 'wrong' in self.msg or 'exsist' in self.msg or '/login' in self.msg or '/register' in self.msg:
+                pass
+            elif 'password' in self.msg:
+                ans = stdiomask.getpass(prompt=self.msg.rstrip('\n') + ': ')
+                self.server.send(bytes(ans, 'utf-8'))
+            elif 'Succssefully' in self.msg:
+                self.run = True
+                curses.endwin()
+                return True
+            login_win.addstr(self.msg)
+            input_win.addstr('Enter command:')
+            login_win.refresh()
+            input_win.refresh()
 
     def draw_msg(self, curr_y, text, window, color_atter=1):
         window.addstr(curr_y, 1, text, curses.color_pair(color_atter))
@@ -155,10 +170,11 @@ class user():
         self.server.close()
 
 
-obj = user()
-connect = obj.login()
+server_init = user()
+main_win = curses.wrapper(server_init.window)
+connect = main_win.login_window()
 if not connect:
     print('Cant connect server\n*Disconnected from server')
     time.sleep(3)
 else:
-    curses.wrapper(obj.window)
+    curses.wrapper(main_win.window)
