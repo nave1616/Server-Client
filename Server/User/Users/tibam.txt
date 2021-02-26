@@ -1,1 +1,2 @@
-123321
+password:123321
+admin:True

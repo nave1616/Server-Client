@@ -81,11 +81,11 @@ def log(conn, adder):
 def notify_all(conn, user_name, msg):
     for con in connections:
         if con != conn:
-            mesg = user_name + ' - ' + msg
-            con.send(bytes(mesg, 'utf-8'))
-        else:
-            msg = 'You - ' + msg
-            conn.send(bytes(msg, 'utf-8'))
+            msg_all = user_name + ' - ' + msg
+            con.send(bytes(msg_all, 'utf-8'))
+        elif con == conn:
+            msg_you = 'You - ' + msg
+            con.send(bytes(msg_you, 'utf-8'))
 
 
 def notify_conn(conn, msg):
