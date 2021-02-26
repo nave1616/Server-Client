@@ -1,6 +1,6 @@
 from Socketserver import Server
-from User import Login
-from User import commands
+from Socketserver import cmd
+from User import User
 import log_handler as logging
 import os
 import time
@@ -41,7 +41,6 @@ def log(conn, adder):
                 conn.send(bytes('Succssefully logged in', 'utf-8'))
                 connections.append(conn)
                 usr[u_msg] = logs.get_obj()
-                print(usr[u_msg].admin)
                 print(u_msg, 'Logged in')
                 logging.usr_log(u_msg + ' is logged in to the server.')
                 chat(conn, adder, u_msg)
@@ -93,7 +92,7 @@ def notify_conn(conn, msg):
 
 
 def is_admin(user_name):
-    return logs.has_admin(user_name)
+    return usr[user_name].admin
 
 
 def welcome(conn, user_name):
@@ -104,19 +103,6 @@ def welcome(conn, user_name):
             con.send(bytes(mesg, 'utf-8'))
 
 
-def file_handler(conn, user_name, file_buffer, file_name, file_size):
-    chunk = ''
-    while file_buffer > 1024:
-        chunk += conn.recv(1024).decode('utf-8')
-        file_buffer = file_buffer - 1024
-    chunk += conn.recv(1024).decode('utf-8')
-    with open(os.path.join(root_path, 'Files', file_name), 'wb') as file:
-        file.write(chunk)
-    msg = 'Server recived file\nsender: ' + user_name + \
-        '\nfile name: ' + file_name + '\nsize: ' + file_size
-    notify_all(conn, user_name, msg)
-
-
 def chat(conn, adder, user_name):
     welcome(conn, user_name)
     while True:
@@ -125,7 +111,7 @@ def chat(conn, adder, user_name):
         if not msg:
             break
         elif '/' in msg[0]:
-            commands(conn, usr[user_name], msg)
+            cmd.main_handeler(conn, usr[user_name], msg)
         else:
             print(user_name, '-', msg)
             notify_all(conn, user_name, msg)
@@ -137,6 +123,6 @@ def chat(conn, adder, user_name):
 
 root_path = os.path.dirname(
     os.path.abspath(__file__))
-logs = Login()
+logs = User()
 server = Server()
 server.accept_connection(log)
