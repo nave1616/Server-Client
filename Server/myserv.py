@@ -4,6 +4,7 @@ from User import User
 import log_handler as logging
 import os
 import time
+import concurrent.futures
 
 connections = []
 usr = {}
@@ -43,7 +44,7 @@ def log(conn, adder):
                 usr[u_msg] = logs.get_obj()
                 print(u_msg, 'Logged in')
                 logging.usr_log(u_msg + ' is logged in to the server.')
-                chat(conn, adder, u_msg)
+                break
             elif logs.logged_in(u_msg):
                 conn.send(
                     bytes('User_name allready connected to server.', 'utf-8'))
@@ -75,6 +76,7 @@ def log(conn, adder):
             conn.send(bytes('No user name enterd!', 'utf-8'))
         else:
             conn.send(bytes('Wrong comand!', 'utf-8'))
+    chat(conn, adder, u_msg)
 
 
 def notify_all(conn, user_name, msg):
@@ -111,7 +113,10 @@ def chat(conn, adder, user_name):
         if not msg:
             break
         elif '/' in msg[0]:
-            cmd.main_handeler(conn, usr[user_name], msg)
+            return_value = cmd.main_handeler(
+                conn, usr[user_name], msg)
+            print('     Server notify', '-', return_value)
+            notify_all(None, 'Server', return_value)
         else:
             print(user_name, '-', msg)
             notify_all(conn, user_name, msg)

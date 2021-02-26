@@ -3,7 +3,8 @@ import threading
 import time
 import stdiomask
 import curses
-from os import system, path
+import os
+from pathlib import Path
 
 
 class Terminal():
@@ -38,7 +39,12 @@ class Terminal():
         self.send_m(stdscr)
 
     def draw_msg(self, curr_y, text, window, color_atter=1):
-        window.addstr(curr_y, 1, text, curses.color_pair(color_atter))
+        if color_atter != 1:
+            window.addstr(curr_y, 1, text, curses.color_pair(
+                color_atter) | curses.A_BOLD)
+        else:
+            window.addstr(curr_y, 1, text, curses.color_pair(
+                color_atter))
 
     def announce(self, curr_y, text, window, color_atter=1):
         for i in range(len(text)):
@@ -65,14 +71,15 @@ class Terminal():
         self.mypad_refresh = lambda: self.pad.refresh(
             self.msg_current_y, 0, self.msg_current_print_y, 0, 20, self.max_x - 1)
         self.mypad_refresh()
-        self.realease = True
         while self.run:
+            self.realease = True
             self.g_msg = self.socket.recv(1024).decode('utf-8')
+            self.realease = False
             curses.curs_set(0)
             if not self.g_msg:
                 self.run = False
                 self.draw_msg(self.msg_current_y,
-                              '**Disconnected from server**', self.pad)
+                              '**Server is closed**', self.pad)
                 self.mypad_refresh()
             else:
                 spaces = self.g_msg.count('\n') + 1
@@ -108,11 +115,11 @@ class Terminal():
         win = curses.newwin(
             height, width, input_begin_y, input_begin_x)
         while not self.realease:
-            time.sleep(0.1)
+            time.sleep(0.01)
         win.keypad(True)
         win.bkgd(' ', curses.color_pair(1))
         while self.run:
-            curses.curs_set(1)
+            time.sleep(0.01)
             win.box()
             if self.connected == False:
                 if 'password' in self.g_msg:
@@ -124,44 +131,62 @@ class Terminal():
             win.move(step_y, step_X)
             win.refresh()
             get = win.getch()
-            if get != ord('\n') and get != curses.KEY_UP and get != curses.KEY_DOWN and get != curses.KEY_BACKSPACE:
-                if 'password' in self.g_msg and self.connected == False:
-                    inp = inp + chr(get)
-                    win.addch(step_y, step_X + 1, '*')
-                    step_X += 1
-                else:
-                    inp = inp + chr(get)
-                    win.addch(step_y, step_X, chr(get))
-                    step_X += 1
-            elif get == curses.KEY_UP and self.show > 0 and self.page > 0:
-                self.show -= 1
-                self.pad.refresh(self.show, 0,
-                                 0, 0, 20, 40)
-                win.refresh()
-            elif get == curses.KEY_DOWN and self.show < self.msg_current_y:
-                self.show += 1
-                self.pad.refresh(self.show, 0,
-                                 self.msg_current_print_y + 1, 0, 20, 40)
-                win.refresh()
-            elif get == curses.KEY_BACKSPACE:
-                if step_X - 1 > 15:
-                    step_X -= 1
+            if self.realease:
+                curses.curs_set(1)
+                if get != ord('\n') and get != curses.KEY_UP and get != curses.KEY_DOWN and get != curses.KEY_BACKSPACE:
+                    if 'password' in self.g_msg and self.connected == False:
+                        inp = inp + chr(get)
+                        win.addch(step_y, step_X + 1, '*')
+                        step_X += 1
+                    else:
+                        inp = inp + chr(get)
+                        win.addch(step_y, step_X, chr(get))
+                        step_X += 1
+                elif get == curses.KEY_UP and self.show > 0 and self.page > 0:
+                    self.show -= 1
+                    self.pad.refresh(self.show, 0,
+                                     0, 0, 20, 40)
+                    win.refresh()
+                elif get == curses.KEY_DOWN and self.show < self.msg_current_y:
+                    self.show += 1
+                    self.pad.refresh(self.show, 0,
+                                     self.msg_current_print_y + 1, 0, 20, 40)
+                    win.refresh()
+                elif get == curses.KEY_BACKSPACE:
+                    if step_X - 1 > 15:
+                        step_X -= 1
+                        win.move(step_y, step_X)
+                        win.clrtoeol()
+                        win.refresh()
+                        inp = inp[0:len(inp) - 1]
+                elif get == ord('\n') and inp != '':
+                    step_X = 16
                     win.move(step_y, step_X)
                     win.clrtoeol()
                     win.refresh()
-                    inp = inp[0:len(inp) - 1]
-            elif get == ord('\n') and inp != '':
-                step_X = 16
-                win.move(step_y, step_X)
-                win.clrtoeol()
-                win.refresh()
-                if self.run:
-                    self.socket.send(bytes(inp, 'utf-8'))
-                elif self.run and inp[0] == '/':
-                    # To add command
-                    self.socket.send(bytes(inp, 'utf-8'))
-                inp = ''
-                win.refresh()
+                    if self.run and inp[0] != '/':
+                        self.socket.send(bytes(inp, 'utf-8'))
+                    elif self.run and inp[0] == '/' and self.connected == False:
+                        self.socket.send(bytes(inp, 'utf-8'))
+                    elif self.run and inp[0] == '/' and self.connected == True:
+                        inp = str(inp)
+                        file_path = inp.split(' ')[-1]
+                        self.socket.send(bytes(str(inp), 'utf-8')
+                                         )  # msg /file path
+                        time.sleep(0.5)
+                        try:
+                            data_buffer = str(Path(file_path).stat().st_size)
+                        except FileNotFoundError:
+                            # To do error file not exist
+                            pass
+                        self.socket.send(
+                            bytes(data_buffer, 'utf-8'))  # file size
+                        data = Path(file_path).read_bytes()
+                        self.socket.send(data)  # file data
+                    inp = ''
+                    win.refresh()
+            else:
+                continue
         self.socket.close()
 
 
@@ -169,5 +194,6 @@ ip = '0.0.0.0'
 port = 5050
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.connect((ip, port))
+lock = threading.Lock()
 server_init = Terminal(server)
 main_win = curses.wrapper(server_init.window)
