@@ -64,9 +64,12 @@ def file_handeler(conn, user_name, root_path, file_path):
         return
     file_size = convert_bytes(file_buffer)
     getnow = 0
-    #update = threading.Thread(target=update_conn, args=(conn,))
-    # update.setDaemon(True)
-    # update.start()
+    if file_buffer > 10000000:  # 10MB
+        update = threading.Thread(target=update_conn, args=(conn,))
+        update.setDaemon(True)
+        update.start()
+    else:
+        notify_conn(conn, 'File upload is started')
     while 4096 < file_buffer:
         file_buffer = file_buffer - 4096
         getnow += 4096

@@ -22,6 +22,7 @@ def log(conn, adder):
     while not log_in:
         try:
             l_msg = conn.recv(1024).decode('utf-8')
+            u_msg = l_msg.split(' ')[-1]
         except:
             conn.close()
             break
@@ -38,7 +39,7 @@ def log(conn, adder):
                 conn.close()
                 # to be - Disconnected message
                 break
-            if logs.login(u_msg, p_msg, conn):
+            if logs.login(u_msg, p_msg, conn, adder):
                 conn.send(bytes('2Succssefully logged in', 'utf-8'))
                 connections.append(conn)
                 usr[u_msg] = logs.get_obj()
@@ -49,29 +50,25 @@ def log(conn, adder):
                 conn.send(
                     bytes('3User_name allready connected to server.', 'utf-8'))
             else:
-                try:
-                    print(logs.user_info[0].split(':')[-1])
-                except IndexError:
-                    pass
                 conn.send(
                     bytes('3User_name/Password are Dont exsist/Wrong!.', 'utf-8'))
-        elif '/register' in l_msg:
-            conn.send(bytes('Enter password: ', 'utf-8'))
+        elif '/register' in l_msg and not logs.exsist(u_msg):
+            conn.send(bytes('Enter password ', 'utf-8'))
             try:
                 p_msg = conn.recv(1024).decode('utf-8')
             except:
                 conn.close()
                 # to be - Disconnected message
                 break
-            if logs.register(u_msg, p_msg, conn):
+            if logs.register(u_msg, p_msg, conn, adder):
                 conn.send(bytes('2   Succssefully logged in   ', 'utf-8'))
                 connections.append(conn)
                 print(u_msg, 'Logged in')
                 logging.usr_log(u_msg + ' is logged in to the server.')
                 chat(conn, adder, u_msg)
-            elif logs.exsist(u_msg):
-                conn.send(
-                    bytes('3User_name not aviailable.', 'utf-8'))
+        elif '/register' in l_msg and logs.exsist(u_msg):
+            conn.send(
+                bytes('3User_name not aviailable.', 'utf-8'))
         elif '/login' in l_msg and len(l_msg) <= 7:
             conn.send(bytes('3No user name enterd!', 'utf-8'))
         else:
