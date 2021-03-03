@@ -40,17 +40,14 @@ class User(object):
             return False
 
     def register(self, username, password, conn, adder):
-        if not self.exsist(username):
-            with open(os.path.join(self.user_dict, username + '.txt'), 'a') as user_file:
-                user_file.write('password:' + str(password) +
-                                '\nadmin:False\nip:' + str(adder[0]))
-                self.user_name = username
-                self.ip = adder
-                self.admin = False
-                self.users.append(self.user_name)
-                return True
-        else:
-            return False
+        with open(os.path.join(self.user_dict, username + '.txt'), 'a') as user_file:
+            user_file.write('password:' + str(password) +
+                            '\nadmin:False\nip:' + str(adder[0]))
+        self.user_name = username
+        self.ip = adder
+        self.admin = False
+        self.users.append(self.user_name)
+        return True
 
     def read_user_file(self, username):
         with open(os.path.join(self.user_dict, username + '.txt'), 'r') as user_file:
@@ -69,8 +66,7 @@ class User(object):
                             '\nadmin:' + str(admin) + '\nip:' + str(adder[0]))
 
     def exsist(self, username):
-        try_user_name = username
-        if os.path.isfile(os.path.join(self.user_dict, try_user_name + '.txt')):
+        if os.path.exists(os.path.join(self.user_dict, username + '.txt')):
             return True
         else:
             return False

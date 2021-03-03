@@ -1,7 +1,7 @@
 from Socketserver import Server
 from Socketserver import cmd
 from User import User
-import log_handler as logging
+import log_handler as logger
 import os
 import time
 import concurrent.futures
@@ -11,7 +11,7 @@ usr = {}
 
 
 def log(conn, adder):
-    logging.conn_log(adder[0] + ' is logged in to the server.')
+    logger.conn_log(adder[0] + ' is logged in to the server.')
     log_in = False
     try:
         conn.send(bytes(
@@ -39,40 +39,39 @@ def log(conn, adder):
                 conn.close()
                 # to be - Disconnected message
                 break
-            if logs.login(u_msg, p_msg, conn, adder):
-                conn.send(bytes('2Succssefully logged in', 'utf-8'))
+            if user.login(u_msg, p_msg, conn, adder):
+                color_for_conn('Succssefully logged in', conn, 2)
                 connections.append(conn)
-                usr[u_msg] = logs.get_obj()
-                print(u_msg, 'Logged in')
-                logging.usr_log(u_msg + ' is logged in to the server.')
+                usr[u_msg] = user.get_obj()
+                logger.usr_log(u_msg + ' is logged in to the server.')
                 chat(conn, adder, u_msg)
-            elif logs.logged_in(u_msg):
-                conn.send(
-                    bytes('3User_name allready connected to server.', 'utf-8'))
+            elif user.logged_in(u_msg):
+                color_for_conn(
+                    'User_name allready connected to server.', conn, 3)
             else:
-                conn.send(
-                    bytes('3User_name/Password are Dont exsist/Wrong!.', 'utf-8'))
-        elif '/register' in l_msg and not logs.exsist(u_msg):
-            conn.send(bytes('Enter password ', 'utf-8'))
-            try:
-                p_msg = conn.recv(1024).decode('utf-8')
-            except:
-                conn.close()
-                # to be - Disconnected message
-                break
-            if logs.register(u_msg, p_msg, conn, adder):
-                conn.send(bytes('2   Succssefully logged in   ', 'utf-8'))
+                color_for_conn(
+                    'User_name/Password are Dont exsist/Wrong!.', conn, 3)
+
+        elif '/register' in l_msg:
+            if user.exsist(u_msg) == False:
+                try:
+                    conn.send(bytes('Enter password ', 'utf-8'))
+                    p_msg = conn.recv(1024).decode('utf-8')
+                except:
+                    conn.close()
+                    break
+                user.register(u_msg, p_msg, conn, adder)
+                color_for_conn('Succssefully logged in', conn, 2)
                 connections.append(conn)
-                print(u_msg, 'Logged in')
-                logging.usr_log(u_msg + ' is logged in to the server.')
+                usr[u_msg] = user.get_obj()
+                logger.usr_log(u_msg + ' is logged in to the server.')
                 chat(conn, adder, u_msg)
-        elif '/register' in l_msg and logs.exsist(u_msg):
-            conn.send(
-                bytes('3User_name not aviailable.', 'utf-8'))
+            else:
+                color_for_conn('User_name not aviailable.', conn, 3)
         elif '/login' in l_msg and len(l_msg) <= 7:
-            conn.send(bytes('3No user name enterd!', 'utf-8'))
+            color_for_conn('No user name enterd!', conn, 3)
         else:
-            conn.send(bytes('3Wrong comand!', 'utf-8'))
+            color_for_conn('Wrong command', conn, 3)
 
 
 def notify_all(msg, conn=None, user_name='Server'):
@@ -85,7 +84,7 @@ def notify_all(msg, conn=None, user_name='Server'):
             con.send(bytes(msg_you, 'utf-8'))
 
 
-def color_msg(msg, conn=None, user_name='Server', color_attr=1):
+def color_for_all(msg, conn=None, user_name='Server', color_attr=1):
     for con in connections:
         if con != conn:
             msg_all = str(color_attr) + user_name + ' - ' + msg
@@ -95,15 +94,20 @@ def color_msg(msg, conn=None, user_name='Server', color_attr=1):
             con.send(bytes(msg_you, 'utf-8'))
 
 
+def color_for_conn(msg, conn=None, color_attr=1):
+    mesg = str(color_attr) + msg
+    conn.send(bytes(mesg, 'utf-8'))
+
+
 def welcome(conn, user_name):
     conn.send(bytes(user_name + ' - Welcome! to the server\n', 'utf-8'))
     for con in connections:
         if con != conn:
-            mesg = str(3) + user_name + ' Connected to the server'
-            con.send(bytes(mesg, 'utf-8'))
+            color_for_conn(user_name + ' Connected to the server', conn, 2)
 
 
 def chat(conn, adder, user_name):
+    print(user_name, 'Logged in')
     connected = True
     welcome(conn, user_name)
     while connected:
@@ -128,15 +132,15 @@ def chat(conn, adder, user_name):
             notify_all(msg, conn, user_name)
     conn.close()
     print('*', user_name, 'Discconected from server*')
-    if user_name in logs.users:
-        logs.users.remove(user_name)  # /User name list
+    if user_name in user.users:
+        user.users.remove(user_name)  # /User name list
     if conn in connections:
         connections.remove(conn)  # Connections list
-    color_msg(user_name + ' disconnected from server', color_attr=3)
+    color_for_all(user_name + ' disconnected from server', color_attr=3)
 
 
 root_path = os.path.dirname(
     os.path.abspath(__file__))
-logs = User()
+user = User()
 server = Server()
 server.accept_connection(log)
